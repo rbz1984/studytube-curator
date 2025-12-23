@@ -1,17 +1,19 @@
 const API_BASE = "https://studytube-curator-vercel-j19d934dg-rbz1984s-projects.vercel.app/api/curate";
 let currentIntent = "Concept Understanding";
 let currentTimeFilter = "all_time";
-let lastQuery = "";
+let lastCurationUrl = "";
 
 // ----------------------------------------------------------------
 // UI INJECTION LOGIC
 // ----------------------------------------------------------------
 
 function injectPanel() {
+    // Only inject if it's a search results page
+    if (!window.location.pathname.includes('/results')) return;
     if ($('#studytube-curator-panel').length) return;
 
     const panelHtml = `
-        <div id="studytube-curator-panel">
+        <div id="studytube-curator-panel" style="display:none;">
             <div class="st-header">
                 <div class="st-title-wrap">
                     <h2>🎓 StudyTube Curated Results</h2>
@@ -47,10 +49,11 @@ function injectPanel() {
         </div>
     `;
 
-    // Target the YouTube results contents
-    const target = $('ytd-search #contents.ytd-section-list-renderer').first();
+    // Target the YouTube results area
+    const target = $('ytd-search #contents.ytd-section-list-renderer, #primary #contents').first();
     if (target.length) {
         target.prepend(panelHtml);
+        $('#studytube-curator-panel').fadeIn(400);
         attachEvents();
         checkOnboarding();
         performCuration();
@@ -58,7 +61,7 @@ function injectPanel() {
 }
 
 function attachEvents() {
-    $('.st-pill').on('click', function () {
+    $('.st-pill').off('click').on('click', function () {
         const type = $(this).data('type');
         const val = $(this).data('value');
 
@@ -68,7 +71,7 @@ function attachEvents() {
         $(this).siblings().removeClass('active');
         $(this).addClass('active');
 
-        performCuration();
+        performCuration(true); // Forced curation
     });
 }
 
@@ -76,37 +79,38 @@ function attachEvents() {
 // DATA FETCHING
 // ----------------------------------------------------------------
 
-async function performCuration() {
+async function performCuration(force = false) {
     const params = new URLSearchParams(window.location.search);
     const query = params.get('search_query');
     if (!query) return;
 
-    if (query === lastQuery && $('#studytube-curator-panel').length > 0) {
-        // Already loaded for this query
-        return;
-    }
-    lastQuery = query;
+    const currentUrl = window.location.href + currentIntent + currentTimeFilter;
+    if (!force && currentUrl === lastCurationUrl) return;
+    lastCurationUrl = currentUrl;
 
     $('#st-results-grid').html('<div style="text-align:center; padding: 40px; color: #64748b;">Curating best results...</div>');
 
     try {
-        const response = await fetch(API_BASE, {
+        // Try POST first
+        let response = await fetch(API_BASE, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-                query: query,
-                intent: currentIntent,
-                timeFilter: currentTimeFilter
-            })
-        });
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ query, intent: currentIntent, timeFilter: currentTimeFilter }),
+            signal: AbortSignal.timeout(10000)
+        }).catch(() => null);
+
+        // Fallback to GET if POST fails
+        if (!response || !response.ok) {
+            console.log("StudyTube: POST failed or timed out, trying GET fallback...");
+            const getUrl = `${API_BASE}?query=${encodeURIComponent(query)}&intent=${encodeURIComponent(currentIntent)}&timeFilter=${currentTimeFilter}`;
+            response = await fetch(getUrl, { signal: AbortSignal.timeout(10000) });
+        }
 
         const videos = await response.json();
         renderCards(videos);
     } catch (error) {
         console.error("StudyTube Extension Error:", error);
-        $('#st-results-grid').html('<div style="text-align:center; padding: 20px; color: #ef4444;">Failed to load curated results. Check your API endpoint.</div>');
+        $('#st-results-grid').html('<div style="text-align:center; padding: 20px; color: #ef4444;">Failed to load curated results. Check your connection or API endpoint.</div>');
     }
 }
 
@@ -115,7 +119,7 @@ function renderCards(videos) {
     grid.empty();
 
     if (!Array.isArray(videos) || videos.length === 0) {
-        grid.html('<div style="text-align:center; padding: 20px; color: #64748b;">No curated results found for this study intent.</div>');
+        grid.html('<div style="text-align:center; padding: 20px; color: #64748b;">No high-quality educational results found for this topic.</div>');
         return;
     }
 
@@ -124,7 +128,7 @@ function renderCards(videos) {
             <a href="/watch?v=${video.videoId}" class="st-video-card ${video.isTopMatch ? 'top-match' : ''}">
                 <div class="st-thumb-container">
                     <img src="${video.thumbnail}" class="st-thumb">
-                    <span class="st-duration">${video.durationFormatted}</span>
+                    <span class="st-duration">${video.duration}</span>
                 </div>
                 <div class="st-details">
                     <div class="st-badges">
@@ -132,12 +136,12 @@ function renderCards(videos) {
                         ${video.isNew ? `<span class="st-badge st-badge-secondary">🆕 Updated</span>` : ''}
                     </div>
                     <div class="st-video-title">${video.title}</div>
-                    <div class="st-meta">${video.channel} • ${video.publishedYear}</div>
+                    <div class="st-meta">${video.channel} • Published ${video.publishedYear}</div>
                     <div class="st-confidence">✓ ${video.confidenceSignal}</div>
                     ${video.contrastLine ? `<div class="st-contrast">ℹ ${video.contrastLine}</div>` : ''}
                     <div class="st-note">
                         <strong>Curator's Note:</strong><br>
-                        ${video.explanation.split('\n• ').slice(1).join('<br>• ')}
+                        ${video.explanation}
                     </div>
                     ${video.isTopMatch ? '<div class="st-start-here">▶ Start Here</div>' : ''}
                 </div>
@@ -154,54 +158,71 @@ function renderCards(videos) {
 function checkOnboarding() {
     chrome.storage.local.get(['onboardingCompleted'], function (result) {
         if (!result.onboardingCompleted) {
-            showTooltips();
+            setTimeout(showTooltips, 1500);
         }
     });
 }
 
 function showTooltips() {
+    if ($('.st-tooltip').length) return;
+
     const tooltips = [
         { el: '#st-intent-group', text: "Choose your study goal: Revision, Understanding, or Deep Study.", pos: 'bottom' },
-        { el: '#st-freshness-group', text: "Prioritize recently updated content.", pos: 'bottom' },
-        { el: '.st-start-here', text: "The #1 expert recommendation to start your session.", pos: 'bottom' }
+        { el: '#st-freshness-group', text: "Prioritize recently updated content.", pos: 'bottom' }
     ];
 
-    setTimeout(() => {
-        tooltips.forEach((t, i) => {
-            const target = $(t.el).first();
-            if (target.length) {
-                const offset = target.offset();
-                const tt = $(`<div class="st-tooltip ${t.pos}">${t.text}<br><button class="st-tt-close" style="margin-top:8px; background:none; border:1px solid white; color:white; cursor:pointer; font-size:10px; border-radius:4px; padding:2px 6px;">Got it</button></div>`);
+    tooltips.forEach((t, i) => {
+        const target = $(t.el).first();
+        if (target.length) {
+            const offset = target.offset();
+            const tt = $(`
+                <div class="st-tooltip ${t.pos}">
+                    ${t.text}
+                    <div style="margin-top:8px; text-align:right;">
+                        <button class="st-tt-close">Got it</button>
+                    </div>
+                </div>
+            `);
 
-                $('body').append(tt);
-                tt.css({
-                    top: offset.top + target.outerHeight() + 10,
-                    left: offset.left
-                });
+            $('body').append(tt);
+            tt.css({
+                top: offset.top + target.outerHeight() + 12,
+                left: offset.left
+            });
 
-                tt.find('.st-tt-close').click(function () {
-                    tt.remove();
-                    if (i === tooltips.length - 1) {
+            tt.find('.st-tt-close').click(function () {
+                tt.fadeOut(200, function () {
+                    $(this).remove();
+                    if ($('.st-tooltip').length === 0) {
                         chrome.storage.local.set({ onboardingCompleted: true });
                     }
                 });
-            }
-        });
-    }, 2000);
+            });
+        }
+    });
 }
 
 // ----------------------------------------------------------------
 // YOUTUBE NAVIGATION OBSERVER
 // ----------------------------------------------------------------
 
-// YouTube uses SPA navigation. We need to catch search events.
-window.addEventListener('yt-navigate-finish', function () {
-    if (window.location.pathname === '/results') {
-        setTimeout(injectPanel, 1000); // Give YT a moment to render basics
+// Use a mutation observer to follow YouTube's SPA navigation
+let lastPath = location.pathname + location.search;
+const navObserver = new MutationObserver(() => {
+    const currentPath = location.pathname + location.search;
+    if (currentPath !== lastPath) {
+        lastPath = currentPath;
+        if (location.pathname === '/results') {
+            console.log("StudyTube: Navigation change detected, re-injecting...");
+            setTimeout(injectPanel, 1500);
+        }
     }
 });
+navObserver.observe(document, { subtree: true, childList: true });
 
 // Initial load check
-if (window.location.pathname === '/results') {
-    $(document).ready(() => setTimeout(injectPanel, 1500));
-}
+$(document).ready(() => {
+    if (window.location.pathname === '/results') {
+        setTimeout(injectPanel, 2000);
+    }
+});

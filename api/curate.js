@@ -49,46 +49,48 @@ function calculateTrustScore(viewCount) {
 
 export default async function handler(req, res) {
     // 1️⃣ ENABLE FULL CORS SUPPORT
-    res.setHeader('Access-Control-Allow-Credentials', true);
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
-    // Handle Preflight OPTIONS request
     if (req.method === 'OPTIONS') {
-        res.status(200).end();
-        return;
+        return res.status(200).end();
     }
 
-    // 2️⃣ FORCE JSON RESPONSE (NO HTML/FAIL-SAFE)
+    // 2️⃣ FORCE JSON RESPONSE
     res.setHeader('Content-Type', 'application/json');
 
-    // 5️⃣ VALIDATE INPUT BODY
-    let body = {};
-    if (req.method === 'POST') {
-        try {
-            body = typeof req.body === 'string' ? JSON.parse(req.body) : req.body;
-        } catch (e) {
-            return res.status(200).json([]); // Fail-safe
-        }
-    } else {
-        // Fallback for debugging, but user asked for POST JSON
-        body = req.query || {};
-    }
-
-    const { query, intent = "Concept Understanding", timeFilter = "all_time" } = body;
-
-    if (!query) {
-        return res.status(200).json([]); // Mandatory empty array on missing query
-    }
-
     try {
+        // Robust body parsing for Vercel
+        let body = {};
+        if (req.method === 'POST') {
+            body = req.body;
+            if (typeof body === 'string') {
+                try { body = JSON.parse(body); } catch (e) { }
+            }
+        }
+
+        // Merge with query for flexibility
+        const data = { ...req.query, ...body };
+        const query = data.query;
+        const intent = data.intent || "Concept Understanding";
+        const timeFilter = data.timeFilter || "all_time";
+
+        if (!query) {
+            return res.status(200).json([]);
+        }
+
         const searchUrl = `https://www.googleapis.com/youtube/v3/search?part=snippet&q=${encodeURIComponent(query)}&type=video&maxResults=${ANTI_GRAVITY_CONFIG.maxResults}&order=relevance&key=${ANTI_GRAVITY_CONFIG.apiKey}`;
         const searchRes = await fetch(searchUrl);
         const searchData = await searchRes.json();
 
+        if (searchData.error) {
+            console.error("YouTube API Error:", searchData.error);
+            return res.status(200).json([]);
+        }
+
         if (!searchData.items || searchData.items.length === 0) {
-            return res.json([]); // Return plain array
+            return res.status(200).json([]);
         }
 
         const videoIds = searchData.items.map(item => item.id.videoId).join(',');
@@ -101,12 +103,11 @@ export default async function handler(req, res) {
             detailsData.items.forEach(item => detailsMap[item.id] = item);
         }
 
-        // Freshness Filters
         let dateThreshold = null;
-        const baseDate = new Date();
-        if (timeFilter === "this_week") dateThreshold = new Date(baseDate.setDate(baseDate.getDate() - 7));
-        else if (timeFilter === "this_month") dateThreshold = new Date(baseDate.setDate(baseDate.getDate() - 30));
-        else if (timeFilter === "last_3_months") dateThreshold = new Date(baseDate.setDate(baseDate.getDate() - 90));
+        const now = new Date();
+        if (timeFilter === "this_week") dateThreshold = new Date(now.setDate(now.getDate() - 7));
+        else if (timeFilter === "this_month") dateThreshold = new Date(now.setDate(now.getDate() - 30));
+        else if (timeFilter === "last_3_months") dateThreshold = new Date(now.setDate(now.getDate() - 90));
 
         function processItems(items, filterByDate) {
             let processed = [];
@@ -125,7 +126,7 @@ export default async function handler(req, res) {
 
                 const channelId = item.snippet.channelId;
                 channelCounts[channelId] = (channelCounts[channelId] || 0) + 1;
-                if (channelCounts[channelId] > 2) continue; // Hard rule: Max 2 per channel
+                if (channelCounts[channelId] > 2) continue;
 
                 const stats = detail.statistics;
                 const viewCount = parseInt(stats.viewCount) || 0;
@@ -142,16 +143,15 @@ export default async function handler(req, res) {
                 const totalScore = titleScore + ratioScore + recencyScore + durationScore + trustScore + ytRankBonus;
 
                 if (totalScore < 40) continue;
-                if (processed.length > 0 && viewCount < localLastView / 25) continue;
+                if (processed.length > 0 && viewCount < localLastView / 30) continue;
                 localLastView = Math.max(localLastView === Infinity ? 0 : localLastView, viewCount);
 
                 processed.push({
                     videoId: videoId,
                     title: item.snippet.title,
-                    description: item.snippet.description || "",
-                    // 4️⃣ ENSURE THUMBNAILS ALWAYS LOAD (ABSOLUTE URL)
                     thumbnail: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,
                     channel: item.snippet.channelTitle,
+                    duration: Math.round(durationMin),
                     durationFormatted: `${Math.round(durationMin)} min`,
                     publishedDate: pubDate,
                     publishedYear: pubDate.getFullYear(),
@@ -163,8 +163,6 @@ export default async function handler(req, res) {
         }
 
         let results = processItems(searchData.items, true);
-
-        // Fallback for freshness
         if (timeFilter !== "all_time" && results.length < 3) {
             results = processItems(searchData.items, false);
         }
@@ -173,25 +171,23 @@ export default async function handler(req, res) {
         const finalSelection = results.slice(0, 5);
         const labelCounts = {};
 
-        // 3️⃣ RESPONSE FORMAT (RETURN JSON ARRAY)
         const finalOutput = finalSelection.map((video, idx) => {
             let label = "";
-            const isAcademic = /normalization|definition|forms|dbms|lecture|exam|tutorial|course/i.test(video.title + video.description);
+            const isAcademic = /normalization|definition|forms|dbms|lecture|exam|tutorial|course/i.test(video.title);
 
             if (idx === 0) label = "Best Explained";
-            else if (parseInt(video.durationFormatted) < 8 && video.score >= 65) label = "Quick Revision";
-            else if (video.stats.titleScore > 20 && parseInt(video.durationFormatted) >= 8) label = "Concept Clarity";
+            else if (video.duration < 8 && video.score >= 65) label = "Quick Revision";
+            else if (video.stats.titleScore > 20 && video.duration >= 8) label = "Concept Clarity";
             else if (isAcademic) label = "Syllabus Friendly";
-            else label = parseInt(video.durationFormatted) < 10 ? "Quick Revision" : "Concept Clarity";
+            else label = video.duration < 10 ? "Quick Revision" : "Concept Clarity";
 
-            // Diversity Guard
             labelCounts[label] = (labelCounts[label] || 0) + 1;
             if (labelCounts[label] > 3) label = isAcademic ? "Syllabus Friendly" : "Concept Clarity";
 
             let contrast = "";
             if (idx === 1 || idx === 2) {
                 const prev = finalSelection[idx - 1];
-                if (parseInt(video.durationFormatted) > parseInt(prev.durationFormatted) + 5) contrast = "Covers the topic in more depth";
+                if (video.duration > prev.duration + 5) contrast = "Covers the topic in more depth";
                 else if (/beginner|simple|start/i.test(video.title)) contrast = "More beginner-friendly than above";
                 else if (isAcademic) contrast = "More exam-oriented explanation";
             }
@@ -208,15 +204,14 @@ export default async function handler(req, res) {
                 contrastLine: contrast,
                 isTopMatch: idx === 0,
                 isNew: (new Date() - video.publishedDate) < (30 * 24 * 60 * 60 * 1000),
-                explanation: `Curator's Note: Clear topic match and strong explanation quality.`
+                explanation: `Curator's Note: Educational focus with strong relevance and trust signals.`
             };
         });
 
-        // 6️⃣ GUARANTEE FETCH-SAFE RESPONSE 
         return res.status(200).json(finalOutput);
 
     } catch (error) {
-        // 7️⃣ FAIL-SAFE BEHAVIOR
+        console.error("API Server Error:", error);
         return res.status(200).json([]);
     }
 }
