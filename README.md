@@ -1,29 +1,31 @@
-# StudyTube Curator 🎓
-**Find the best explanation. Skip the noise.**
+# StudyTube Curator 🎓 (Chrome Extension)
+**Find the best explanation. Skip the noise directly on YouTube.**
 
-StudyTube Curator is a smart YouTube search assistant designed specifically for students. It uses a custom "Anti-Gravity" logic engine to prioritize educational quality, clarity, and trust over viral clickbait.
+StudyTube Curator is a smart Chrome Extension that enhances your YouTube search results with a curated student-focused panel. It uses a custom logic engine to prioritize educational quality, clarity, and trust.
 
 ## 🌟 Key Features
-- **Study Intent Selection**: Choose between *Quick Revision*, *Concept Understanding*, or *Deep Study* to get tuned results.
-- **Freshness Filter**: Find the latest content from this week, month, or quarter.
-- **Smart Labels**: Automatically tags videos as *Best Explained*, *Quick Revision*, *Syllabus Friendly*, etc.
-- **Confidence Signals**: Tells you *why* a video was chosen (e.g., "Explains step-by-step").
-- **Contrast Micro-copy**: Differentiates between top results to help you pick the best one.
-- **Channel Diversity**: Ensures a variety of teaching perspectives by limiting duplicate channels.
+- **Native Injection**: Slides a premium curation panel directly into the top of YouTube search results.
+- **Study Intent Selection**: Switch between *Quick Revision*, *Concept Understanding*, or *Deep Study*.
+- **Freshness Control**: Filter for latest content without leaving YouTube.
+- **Expert Labels**: Identifies *Best Explained*, *Syllabus Friendly*, and *New Updates*.
+- **Decision Confidence**: Human-readable "Curator's Notes" and "Contrast Lines" for choosing the right video.
 
-## 🚀 How to Run Locally
-1. Clone this repository:
-   ```bash
-   git clone https://github.com/YOUR_USERNAME/studytube-curator.git
-   ```
-2. Open `index.html` in any modern web browser.
-3. **Important**: You will need your own YouTube Data API v3 Key. Open `script.js` and replace the `apiKey` value in the `ANTI_GRAVITY_CONFIG` object.
+## 🛠️ Folder Structure
+- `/extension`: The Chrome Extension source files (Manifest V3).
+- `/api`: Vercel Serverless Function code for the backend curation logic.
 
-## 🛠️ Technology Stack
-- **HTML5 & CSS3**: Modern responsive design with custom animations.
-- **Bootstrap 5**: Layout and UI components.
-- **jQuery**: Asynchronous API handling and DOM manipulation.
-- **YouTube Data API v3**: Core content source.
+## 🚀 Installation (Developer Mode)
+1. Clone this repository.
+2. Open Chrome and navigate to `chrome://extensions/`.
+3. Enable **Developer Mode**.
+4. Click **Load unpacked** and select the `/extension` folder.
+5. Search for any academic topic on YouTube!
+
+## 🌐 Backend Setup
+The extension calls a serverless API. To host your own:
+1. Deploy the `/api` folder to Vercel.
+2. Update the `API_BASE` variable in `extension/content.js` to your new URL.
+3. Ensure your YouTube API Key is configured in `api/curate.js`.
 
 ## 📝 License
-MIT License. Feel free to use and improve!
+MIT License.

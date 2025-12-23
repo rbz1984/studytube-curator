@@ -1,0 +1,34 @@
+{
+    "manifest_version": 3,
+    "name": "StudyTube Curator",
+    "version": "1.0",
+    "description": "Smart, student-focused search results injected directly into YouTube.",
+    "permissions": [
+        "storage"
+    ],
+    "host_permissions": [
+        "https://www.youtube.com/*",
+        "https://*.vercel.app/*"
+    ],
+    "content_scripts": [
+        {
+            "matches": [
+                "https://www.youtube.com/results?search_query=*"
+            ],
+            "js": [
+                "lib/jquery.min.js",
+                "content.js"
+            ],
+            "css": [
+                "content.css"
+            ]
+        }
+    ],
+    "action": {
+        "default_popup": "popup.html",
+        "default_icon": "icons/icon128.png"
+    },
+    "icons": {
+        "128": "icons/icon128.png"
+    }
+}
