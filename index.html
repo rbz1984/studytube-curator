@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StudyTube Curator - Smart YouTube Search</title>
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+
+<body>
+
+    <!-- Hero Section -->
+    <section class="hero-section text-center">
+        <div class="container">
+            <h1 class="display-4 fw-bold mb-3">StudyTube Curator</h1>
+            <p class="lead text-muted mb-5">Find the best explanation. Skip the noise.</p>
+
+            <div class="search-container mx-auto">
+                <div class="input-group input-group-lg shadow-sm rounded-pill overflow-hidden">
+                    <input type="text" id="searchInput" class="form-control border-0 px-4"
+                        placeholder="Search your topic (e.g. 'RAG explained', 'DBMS normalization')">
+                    <button class="btn btn-primary px-4 bg-gradient border-0" type="button" id="searchBtn">
+                        <i class="fas fa-search"></i>
+                    </button>
+                </div>
+
+                <div class="mt-4 d-flex justify-content-center gap-3 intent-buttons">
+                    <input type="radio" class="btn-check" name="intent" id="intent1" value="Quick Revision"
+                        autocomplete="off">
+                    <label class="btn btn-outline-secondary rounded-pill btn-sm px-3" for="intent1">⚡ Quick
+                        Revision</label>
+
+                    <input type="radio" class="btn-check" name="intent" id="intent2" value="Concept Understanding"
+                        autocomplete="off" checked>
+                    <label class="btn btn-outline-secondary rounded-pill btn-sm px-3" for="intent2">🧠 Concept
+                        Understanding</label>
+
+                    <input type="radio" class="btn-check" name="intent" id="intent3" value="Deep Study"
+                        autocomplete="off">
+                    <label class="btn btn-outline-secondary rounded-pill btn-sm px-3" for="intent3">📚 Deep
+                        Study</label>
+                </div>
+
+                <!-- Time Freshness Filter -->
+                <div class="mt-3 d-flex justify-content-center gap-2 time-filters">
+                    <span class="text-muted small me-2 align-self-center">Freshness:</span>
+                    <input type="radio" class="btn-check" name="timeFilter" id="time1" value="all_time"
+                        autocomplete="off" checked>
+                    <label class="btn btn-filter rounded-pill btn-sm" for="time1">All Time</label>
+
+                    <input type="radio" class="btn-check" name="timeFilter" id="time2" value="this_week"
+                        autocomplete="off">
+                    <label class="btn btn-filter rounded-pill btn-sm" for="time2">This Week</label>
+
+                    <input type="radio" class="btn-check" name="timeFilter" id="time3" value="this_month"
+                        autocomplete="off">
+                    <label class="btn btn-filter rounded-pill btn-sm" for="time3">This Month</label>
+
+                    <input type="radio" class="btn-check" name="timeFilter" id="time4" value="last_3_months"
+                        autocomplete="off">
+                    <label class="btn btn-filter rounded-pill btn-sm" for="time4">Last 3 Months</label>
+                </div>
+
+            </div>
+        </div>
+    </section>
+
+    <!-- Results Section -->
+    <section class="results-section py-5 bg-light min-vh-50">
+        <div class="container">
+            <div id="resultsContainer" class="row justify-content-center">
+                <!-- Results will be injected here -->
+            </div>
+
+            <div id="loading" class="text-center py-5" style="display: none;">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2 text-muted">Curating the best videos for you...</p>
+            </div>
+
+            <div id="emptyState" class="text-center py-5" style="display: none;">
+                <p class="text-muted">No high-quality results found. Try a different topic.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works Section -->
+    <section class="how-it-works py-5">
+        <div class="container text-center">
+            <h2 class="mb-5 fw-bold">How It Works</h2>
+            <div class="row g-4 justify-content-center">
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm p-4">
+                        <div class="icon mb-3 text-primary"><i class="fas fa-keyboard fa-2x"></i></div>
+                        <h5>1. Type your topic</h5>
+                        <p class="text-muted small">Enter what you want to study.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm p-4">
+                        <div class="icon mb-3 text-primary"><i class="fas fa-sliders-h fa-2x"></i></div>
+                        <h5>2. Choose Intent</h5>
+                        <p class="text-muted small">Revision, Understanding, or Deep Study.</p>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="card h-100 border-0 shadow-sm p-4">
+                        <div class="icon mb-3 text-primary"><i class="fas fa-check-circle fa-2x"></i></div>
+                        <h5>3. Get Best Results</h5>
+                        <p class="text-muted small">Algorithm prioritizes clarity over clicks.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <footer class="text-center py-4 text-muted small">
+        <p>&copy; 2024 StudyTube Curator</p>
+    </footer>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Custom Script -->
+    <script src="script.js"></script>
+</body>
+
+</html>
