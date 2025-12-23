@@ -1,7 +1,6 @@
 const API_BASE = "https://studytube-curator-vercel-j19d934dg-rbz1984s-projects.vercel.app/api/curate";
 let currentIntent = "Concept Understanding";
 let currentTimeFilter = "all_time";
-let lastCurationKey = "";
 let isFetching = false;
 
 // ----------------------------------------------------------------
@@ -10,8 +9,6 @@ let isFetching = false;
 
 function injectPanel() {
     if (!window.location.pathname.includes('/results')) return;
-
-    // Check if panel already exists in the DOM
     if (document.getElementById('studytube-curator-panel')) return;
 
     const panelHtml = `
@@ -45,13 +42,12 @@ function injectPanel() {
 
             <div id="st-results-grid">
                 <div class="st-loading-state">
-                    <span class="st-loading-spinner">↺</span> Curating best results for your session...
+                    <span class="st-loading-spinner">↺</span> Curating best results...
                 </div>
             </div>
         </div>
     `;
 
-    // High-reliability search target
     const searchTarget = document.querySelector('ytd-search #contents.ytd-section-list-renderer, #primary #contents, ytd-search #primary-items');
 
     if (searchTarget) {
@@ -66,7 +62,6 @@ function injectPanel() {
 function attachEvents() {
     $('.st-pill').off('click').on('click', function () {
         if (isFetching) return;
-
         const type = $(this).data('type');
         const val = $(this).data('value');
 
@@ -76,7 +71,7 @@ function attachEvents() {
         $(this).siblings().removeClass('active');
         $(this).addClass('active');
 
-        performCuration(true);
+        performCuration();
     });
 }
 
@@ -84,45 +79,32 @@ function attachEvents() {
 // DATA FETCHING
 // ----------------------------------------------------------------
 
-async function performCuration(force = false) {
+async function performCuration() {
     const params = new URLSearchParams(window.location.search);
     const query = params.get('search_query');
     if (!query || isFetching) return;
 
-    const curationKey = query + currentIntent + currentTimeFilter;
-    if (!force && curationKey === lastCurationKey) return;
-
     isFetching = true;
-    lastCurationKey = curationKey;
-
     const grid = $('#st-results-grid');
     grid.html('<div class="st-loading-state"><span class="st-loading-spinner">↺</span> Curating best results...</div>');
 
+    const url = `${API_BASE}?query=${encodeURIComponent(query)}&intent=${encodeURIComponent(currentIntent)}&timeFilter=${currentTimeFilter}`;
+    console.log("StudyTube: Fetching from", url);
+
     try {
-        const payload = { query, intent: currentIntent, timeFilter: currentTimeFilter };
-
-        // Use GET with AbortController for better reliability on Vercel Free
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout
-
-        const response = await fetch(`${API_BASE}?query=${encodeURIComponent(query)}&intent=${encodeURIComponent(currentIntent)}&timeFilter=${currentTimeFilter}`, {
-            signal: controller.signal
+        const response = await fetch(url, {
+            method: 'GET',
+            mode: 'cors',
+            headers: { 'Accept': 'application/json' }
         });
 
-        clearTimeout(timeoutId);
-
-        if (!response.ok) throw new Error("API Error");
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
 
         const videos = await response.json();
         renderCards(videos);
     } catch (error) {
-        console.error("StudyTube Error:", error);
-        // Only show error if the panel is still in DOM
-        if ($('#studytube-curator-panel').length) {
-            grid.html('<div class="st-error-state">⚠️ Failed to load curated results. Trying to reconnect...</div>');
-            // Subtle retry
-            setTimeout(() => performCuration(true), 3000);
-        }
+        console.error("StudyTube Extension Error:", error);
+        grid.html(`<div class="st-error-state">⚠️ Failed to connect to curator. Please refresh or check your connection.</div>`);
     } finally {
         isFetching = false;
     }
@@ -133,15 +115,15 @@ function renderCards(videos) {
     grid.empty();
 
     if (!Array.isArray(videos) || videos.length === 0) {
-        grid.html('<div class="st-no-results">No curated educational videos found for this specific topic.</div>');
+        grid.html('<div class="st-no-results">No high-quality educational videos found for this topic.</div>');
         return;
     }
 
-    videos.forEach((video, i) => {
+    videos.forEach((video) => {
         const cardHtml = `
             <a href="/watch?v=${video.videoId}" class="st-video-card ${video.isTopMatch ? 'top-match' : ''}">
                 <div class="st-thumb-container">
-                    <img src="${video.thumbnail}" class="st-thumb" loading="lazy">
+                    <img src="${video.thumbnail}" class="st-thumb">
                     <span class="st-duration">${video.duration}</span>
                 </div>
                 <div class="st-details">
@@ -149,7 +131,7 @@ function renderCards(videos) {
                         ${video.label ? `<span class="st-badge st-badge-primary">${video.label}</span>` : ''}
                         ${video.isNew ? `<span class="st-badge st-badge-secondary">🆕 Updated</span>` : ''}
                     </div>
-                    <div class="st-video-title" title="${video.title}">${video.title}</div>
+                    <div class="st-video-title">${video.title}</div>
                     <div class="st-meta">${video.channel} • Published ${video.publishedYear}</div>
                     <div class="st-confidence">✓ ${video.confidenceSignal}</div>
                     ${video.contrastLine ? `<div class="st-contrast">ℹ ${video.contrastLine}</div>` : ''}
@@ -165,64 +147,43 @@ function renderCards(videos) {
     });
 }
 
-// ----------------------------------------------------------------
-// ONBOARDING
-// ----------------------------------------------------------------
-
 function checkOnboarding() {
     chrome.storage.local.get(['onboardingCompleted'], function (result) {
         if (!result.onboardingCompleted) {
-            setTimeout(showTooltips, 2000);
+            setTimeout(showTooltips, 1500);
         }
     });
 }
 
 function showTooltips() {
     if ($('.st-tooltip').length) return;
-
     const tooltips = [
-        { el: '#st-intent-group', text: "Choose your study goal: Revision, Understanding, or Deep Study.", pos: 'bottom' },
-        { el: '#st-freshness-group', text: "Prioritize recently updated content.", pos: 'bottom' }
+        { el: '#st-intent-group', text: "Choose your study goal: Revision, Understanding, or Deep Study." },
+        { el: '#st-freshness-group', text: "Prioritize recently updated content." }
     ];
-
     tooltips.forEach((t) => {
         const target = $(t.el);
         if (target.length) {
             const offset = target.offset();
-            const tt = $(`
-                <div class="st-tooltip">
-                    ${t.text}
-                    <button class="st-tt-close">Got it</button>
-                </div>
-            `);
+            const tt = $(`<div class="st-tooltip">${t.text}<button class="st-tt-close">Got it</button></div>`);
             $('body').append(tt);
             tt.css({ top: offset.top + target.outerHeight() + 10, left: offset.left });
             tt.find('.st-tt-close').click(() => {
-                tt.fadeOut(200, () => {
-                    tt.remove();
-                    if ($('.st-tooltip').length === 0) chrome.storage.local.set({ onboardingCompleted: true });
-                });
+                tt.remove();
+                if ($('.st-tooltip').length === 0) chrome.storage.local.set({ onboardingCompleted: true });
             });
         }
     });
 }
 
-// ----------------------------------------------------------------
-// YOUTUBE NAVIGATION TRACKING
-// ----------------------------------------------------------------
-
-// yt-navigate-finish is the official YouTube SPA navigation event
 document.addEventListener('yt-navigate-finish', () => {
     if (window.location.pathname === '/results') {
-        // Clear panel to force fresh injection
-        $('#studytube-curator-panel').remove();
+        const p = document.getElementById('studytube-curator-panel');
+        if (p) p.remove();
         setTimeout(injectPanel, 1000);
     }
 });
 
-// Initial startup
 $(document).ready(() => {
-    if (window.location.pathname === '/results') {
-        setTimeout(injectPanel, 1500);
-    }
+    if (window.location.pathname === '/results') setTimeout(injectPanel, 1500);
 });
